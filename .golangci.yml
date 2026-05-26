@@ -1,8 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: 2026 The plugin-template Authors
 
-run:
-  timeout: 5m
+version: "2"
 
 linters:
   enable:
@@ -12,6 +11,3 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-
-issues:
-  exclude-use-default: false
