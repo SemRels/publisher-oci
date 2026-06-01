@@ -11,13 +11,14 @@ on:
       - GOVERNANCE.md
       - SECURITY.md
       - MAINTAINERS.md
-      - .github/workflows/ci.yml
-      - .github/workflows/release.yml
-      - .github/workflows/security.yml
   workflow_dispatch:
     inputs:
       dry_run:
         description: Dry run - report drift only, open no PRs
+        type: boolean
+        default: false
+      include_workflows:
+        description: Also sync .github/workflows/ files (requires SYNC_TOKEN with workflow scope - PAT from github.com/settings/tokens with repo+workflow scopes)
         type: boolean
         default: false
 
@@ -81,6 +82,7 @@ jobs:
       - name: Apply template files
         env:
           PLUGIN: ${{ matrix.plugin }}
+          INCLUDE_WORKFLOWS: ${{ inputs.include_workflows || 'false' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -97,11 +99,13 @@ jobs:
           if [ -f "template/Dockerfile" ] && [ -f "plugin/Dockerfile" ]; then
             sed "s/plugin-template Authors/$PLUGIN Authors/" "template/Dockerfile" > "plugin/Dockerfile"
           fi
-          for wf in ci.yml release.yml security.yml; do
-            if [ -f "template/.github/workflows/$wf" ] && [ -f "plugin/.github/workflows/$wf" ]; then
-              cp "template/.github/workflows/$wf" "plugin/.github/workflows/$wf"
-            fi
-          done
+          if [ "$INCLUDE_WORKFLOWS" = "true" ]; then
+            for wf in ci.yml release.yml security.yml; do
+              if [ -f "template/.github/workflows/$wf" ] && [ -f "plugin/.github/workflows/$wf" ]; then
+                cp "template/.github/workflows/$wf" "plugin/.github/workflows/$wf"
+              fi
+            done
+          fi
 
       - name: Create PR if changes exist
         env:
