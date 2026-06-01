@@ -4,20 +4,20 @@ on:
   push:
     branches: [main]
     paths:
-      - 'Dockerfile'
-      - 'Makefile'
-      - 'CODE_OF_CONDUCT.md'
-      - 'CONTRIBUTING.md'
-      - 'GOVERNANCE.md'
-      - 'SECURITY.md'
-      - 'MAINTAINERS.md'
-      - '.github/workflows/ci.yml'
-      - '.github/workflows/release.yml'
-      - '.github/workflows/security.yml'
+      - Dockerfile
+      - Makefile
+      - CODE_OF_CONDUCT.md
+      - CONTRIBUTING.md
+      - GOVERNANCE.md
+      - SECURITY.md
+      - MAINTAINERS.md
+      - .github/workflows/ci.yml
+      - .github/workflows/release.yml
+      - .github/workflows/security.yml
   workflow_dispatch:
     inputs:
       dry_run:
-        description: 'Dry run — report drift only, open no PRs'
+        description: Dry run - report drift only, open no PRs
         type: boolean
         default: false
 
@@ -26,10 +26,8 @@ permissions:
 
 jobs:
   sync:
-    name: Sync → ${{ matrix.plugin }}
+    name: "Sync ${{ matrix.plugin }}"
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     strategy:
       fail-fast: false
       max-parallel: 8
@@ -76,43 +74,31 @@ jobs:
       - name: Check out plugin
         uses: actions/checkout@v6
         with:
-          repository: SemRels/${{ matrix.plugin }}
+          repository: "SemRels/${{ matrix.plugin }}"
           token: ${{ secrets.SYNC_TOKEN }}
           path: plugin
 
       - name: Apply template files
+        env:
+          PLUGIN: ${{ matrix.plugin }}
         shell: bash
         run: |
           set -euo pipefail
-          PLUGIN="${{ matrix.plugin }}"
-
-          # Files where {{PROJECT_NAME}} is substituted with the repo name
-          SUBST_FILES="CODE_OF_CONDUCT.md CONTRIBUTING.md"
-          for f in $SUBST_FILES; do
+          for f in CODE_OF_CONDUCT.md CONTRIBUTING.md; do
             if [ -f "template/$f" ] && [ -f "plugin/$f" ]; then
-              sed "s/{{PROJECT_NAME}}/$PLUGIN/g; s/{{DEFAULT_BRANCH}}/main/g" \
-                "template/$f" > "plugin/$f"
+              sed "s/{{PROJECT_NAME}}/$PLUGIN/g; s/{{DEFAULT_BRANCH}}/main/g" "template/$f" > "plugin/$f"
             fi
           done
-
-          # Files synced verbatim (only if they already exist in the plugin)
-          VERBATIM_FILES="Dockerfile Makefile GOVERNANCE.md SECURITY.md MAINTAINERS.md"
-          for f in $VERBATIM_FILES; do
+          for f in Makefile GOVERNANCE.md SECURITY.md MAINTAINERS.md; do
             if [ -f "template/$f" ] && [ -f "plugin/$f" ]; then
-              # Dockerfile: update copyright line to use plugin name
-              if [ "$f" = "Dockerfile" ]; then
-                sed "s/plugin-template Authors/$PLUGIN Authors/" \
-                  "template/$f" > "plugin/$f"
-              else
-                cp "template/$f" "plugin/$f"
-              fi
+              cp "template/$f" "plugin/$f"
             fi
           done
-
-          # Workflow files — only if the plugin already has the .yml variant
+          if [ -f "template/Dockerfile" ] && [ -f "plugin/Dockerfile" ]; then
+            sed "s/plugin-template Authors/$PLUGIN Authors/" "template/Dockerfile" > "plugin/Dockerfile"
+          fi
           for wf in ci.yml release.yml security.yml; do
-            if [ -f "template/.github/workflows/$wf" ] && \
-               [ -f "plugin/.github/workflows/$wf" ]; then
+            if [ -f "template/.github/workflows/$wf" ] && [ -f "plugin/.github/workflows/$wf" ]; then
               cp "template/.github/workflows/$wf" "plugin/.github/workflows/$wf"
             fi
           done
@@ -122,50 +108,33 @@ jobs:
           GH_TOKEN: ${{ secrets.SYNC_TOKEN }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
           PLUGIN: ${{ matrix.plugin }}
+          COMMIT_SHA: ${{ github.sha }}
         shell: bash
         run: |
           set -euo pipefail
           cd plugin
-
           git config user.name  "semrel-sync-bot"
           git config user.email "bot@semrel.io"
-
           if git diff --quiet; then
-            echo "✓ $PLUGIN — no changes"
+            echo "OK $PLUGIN - no changes needed"
             exit 0
           fi
-
           CHANGED=$(git diff --name-only | tr '\n' ' ')
-          echo "~ $PLUGIN — changed: $CHANGED"
-
+          echo "DRIFT $PLUGIN - $CHANGED"
           if [ "$DRY_RUN" = "true" ]; then
-            echo "(dry-run — no PR created)"
+            echo "(dry-run - skipping PR)"
             exit 0
           fi
-
+          SHORT_SHA="${COMMIT_SHA:0:7}"
           BRANCH="chore/sync-template-$(date +%Y%m%d)"
-
-          # Skip if branch or open PR already exists
           if git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
-            echo "Branch $BRANCH already exists — skipping"
+            echo "Branch $BRANCH already exists - skipping"
             exit 0
           fi
-
           git checkout -b "$BRANCH"
           git add -A
-          git commit -m "chore: sync from plugin-template
-
-Files updated: $CHANGED
-Source: https://github.com/SemRels/plugin-template/commit/${{ github.sha }}"
-
+          git commit -m "chore: sync from plugin-template@${SHORT_SHA} — $CHANGED"
           git push origin "$BRANCH"
-
-          gh pr create \
-            --title "chore: sync from plugin-template" \
-            --body "Automated sync from [\`plugin-template\`](https://github.com/SemRels/plugin-template).
-
-**Files updated:** \`$CHANGED\`
-
-Triggered by commit ${{ github.sha }}." \
-            --base main \
-            --label "sync" || echo "PR may already exist"
+          TITLE="chore: sync from plugin-template"
+          BODY="Automated sync from SemRels/plugin-template (${SHORT_SHA}). Updated: $CHANGED"
+          gh pr create --repo "SemRels/$PLUGIN" --title "$TITLE" --body "$BODY" --base main --label "sync" || echo "PR may already exist"
