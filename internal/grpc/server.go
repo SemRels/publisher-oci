@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2026 The plugin-template Authors
+// SPDX-FileCopyrightText: 2026 The publisher-oci Authors
 
 package grpc
 
 import (
 	"context"
 
-	semrelplugin "github.com/SemRels/plugin-template/internal/plugin"
+	semrelplugin "github.com/SemRels/publisher-oci/internal/plugin"
 )
 
 // HealthResponse is a lightweight stand-in until generated protobuf bindings are wired in.
