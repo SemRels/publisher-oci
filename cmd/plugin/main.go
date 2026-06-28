@@ -4,22 +4,58 @@
 package main
 
 import (
-	"context"
-	"log"
+	"fmt"
+	"io"
 	"os"
+	"strings"
 
-	grpcserver "github.com/SemRels/publisher-oci/internal/grpc"
-	semrelplugin "github.com/SemRels/publisher-oci/internal/plugin"
+	"github.com/SemRels/publisher-oci/internal/plugin"
 )
 
-func main() {
-	provider := semrelplugin.NewProvider("publisher-oci")
-	server := grpcserver.NewProviderServer(provider)
+const pluginSchemaVersion = 1
 
-	if _, err := server.Health(context.Background()); err != nil {
-		log.Printf("plugin health check failed: %v", err)
-		os.Exit(1)
+func main() {
+	os.Exit(run(os.Stdout, os.Stderr, os.Getenv))
+}
+
+func run(stdout, stderr io.Writer, getenv func(string) string) int {
+	_, _ = fmt.Fprintf(stderr, "plugin_schema_version=%d\n", pluginSchemaVersion)
+
+	version := getenv("SEMREL_VERSION")
+	if version == "" {
+		version = getenv("SEMREL_NEXT_VERSION")
+	}
+	if version == "" {
+		fmt.Fprintln(stderr, "publisher-oci: SEMREL_VERSION is required")
+		return 1
 	}
 
-	log.Printf("%s plugin template is ready", provider.Name())
+	refTemplate := strings.TrimSpace(getenv("SEMREL_PLUGIN_REF"))
+	if refTemplate == "" {
+		fmt.Fprintln(stderr, "publisher-oci: SEMREL_PLUGIN_REF is required")
+		return 1
+	}
+
+	artifacts, err := plugin.ParseArtifacts(getenv)
+	if err != nil {
+		fmt.Fprintln(stderr, "publisher-oci:", err)
+		return 1
+	}
+
+	resolvedRef := plugin.ResolveRef(refTemplate, strings.TrimPrefix(version, "v"))
+	dryRun := strings.EqualFold(getenv("SEMREL_DRY_RUN"), "true")
+	args := plugin.BuildOrasArgs(resolvedRef, artifacts)
+
+	if err := plugin.RunOras(args, stdout, stderr, dryRun); err != nil {
+		fmt.Fprintln(stderr, "publisher-oci:", err)
+		return 1
+	}
+
+	if dryRun {
+		fmt.Fprintf(stdout, "publisher-oci: [dry-run] publication plan ready for %s\n", resolvedRef)
+		return 0
+	}
+
+	fmt.Fprintf(stdout, "publisher-oci: published %d artifact(s) to %s\n", len(artifacts), resolvedRef)
+	return 0
 }

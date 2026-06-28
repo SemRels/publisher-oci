@@ -4,25 +4,41 @@
 package plugin
 
 import (
-	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewProviderDefaultsName(t *testing.T) {
+func TestResolveRefTemplate(t *testing.T) {
 	t.Parallel()
 
-	provider := NewProvider("")
-
-	require.Equal(t, "publisher-oci", provider.Name())
-	require.NoError(t, provider.HealthCheck(context.Background()))
+	require.Equal(t, "ghcr.io/semrels/app:1.2.3", ResolveRef("ghcr.io/semrels/app:{version}", "1.2.3"))
 }
 
-func TestNewProviderUsesProvidedName(t *testing.T) {
+func TestResolveRefAppendsTag(t *testing.T) {
 	t.Parallel()
 
-	provider := NewProvider("provider-example")
+	require.Equal(t, "ghcr.io/semrels/app:1.2.3", ResolveRef("ghcr.io/semrels/app", "1.2.3"))
+}
 
-	require.Equal(t, "provider-example", provider.Name())
+func TestParseArtifactsCSV(t *testing.T) {
+	t.Parallel()
+
+	artifacts, err := ParseArtifacts(func(key string) string {
+		if key == "SEMREL_PLUGIN_ARTIFACTS" {
+			return "dist/a.tar.gz,dist/b.tar.gz"
+		}
+		return ""
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, []string{"dist/a.tar.gz", "dist/b.tar.gz"}, artifacts)
+}
+
+func TestBuildOrasArgs(t *testing.T) {
+	t.Parallel()
+
+	args := BuildOrasArgs("ghcr.io/semrels/app:1.2.3", []string{"dist/app.tar.gz"})
+	require.Equal(t, []string{"push", "ghcr.io/semrels/app:1.2.3", filepath.Clean("dist/app.tar.gz")}, args)
 }

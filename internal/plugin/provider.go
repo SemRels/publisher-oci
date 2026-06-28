@@ -3,31 +3,105 @@
 
 package plugin
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
 
-// Provider defines the minimal contract a SemRel provider plugin should implement.
+// Publisher wraps OCI publication behavior.
+type Publisher struct {
+	name string
+}
+
 type Provider interface {
 	Name() string
 	HealthCheck(context.Context) error
 }
 
-// ProviderPlugin is a small default implementation that can be extended or replaced.
-type ProviderPlugin struct {
-	name string
-}
-
-func NewProvider(name string) *ProviderPlugin {
+func NewPublisher(name string) *Publisher {
 	if name == "" {
 		name = "publisher-oci"
 	}
 
-	return &ProviderPlugin{name: name}
+	return &Publisher{name: name}
 }
 
-func (p *ProviderPlugin) Name() string {
+func (p *Publisher) Name() string {
 	return p.name
 }
 
-func (p *ProviderPlugin) HealthCheck(context.Context) error {
+func (p *Publisher) HealthCheck(context.Context) error {
+	return nil
+}
+
+func ResolveRef(refTemplate, version string) string {
+	resolved := strings.TrimSpace(refTemplate)
+	if strings.Contains(resolved, "{version}") {
+		return strings.ReplaceAll(resolved, "{version}", version)
+	}
+	if strings.Contains(resolved, ":") {
+		return resolved
+	}
+	return resolved + ":" + version
+}
+
+func ParseArtifacts(getenv func(string) string) ([]string, error) {
+	if raw := strings.TrimSpace(getenv("SEMREL_PLUGIN_ARTIFACTS")); raw != "" {
+		parts := strings.Split(raw, ",")
+		artifacts := make([]string, 0, len(parts))
+		for _, item := range parts {
+			trimmed := strings.TrimSpace(item)
+			if trimmed != "" {
+				artifacts = append(artifacts, trimmed)
+			}
+		}
+		if len(artifacts) > 0 {
+			return artifacts, nil
+		}
+	}
+
+	if raw := strings.TrimSpace(getenv("SEMREL_PLUGIN_ARTIFACTS_JSON")); raw != "" {
+		var artifacts []string
+		if err := json.Unmarshal([]byte(raw), &artifacts); err != nil {
+			return nil, fmt.Errorf("parse SEMREL_PLUGIN_ARTIFACTS_JSON: %w", err)
+		}
+		if len(artifacts) > 0 {
+			return artifacts, nil
+		}
+	}
+
+	if single := strings.TrimSpace(getenv("SEMREL_PLUGIN_ARTIFACT")); single != "" {
+		return []string{single}, nil
+	}
+
+	return nil, fmt.Errorf("no artifacts configured (SEMREL_PLUGIN_ARTIFACTS, SEMREL_PLUGIN_ARTIFACTS_JSON, or SEMREL_PLUGIN_ARTIFACT)")
+}
+
+func BuildOrasArgs(ref string, artifacts []string) []string {
+	args := []string{"push", ref}
+	for _, artifact := range artifacts {
+		args = append(args, filepath.Clean(artifact))
+	}
+	return args
+}
+
+func RunOras(args []string, stdout, stderr io.Writer, dryRun bool) error {
+	if dryRun {
+		_, _ = fmt.Fprintf(stdout, "publisher-oci: [dry-run] would run: oras %s\n", strings.Join(args, " "))
+		return nil
+	}
+
+	cmd := exec.Command("oras", args...)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("oras %s: %w", strings.Join(args, " "), err)
+	}
+
 	return nil
 }

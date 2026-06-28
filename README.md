@@ -1,8 +1,6 @@
 # publisher-oci
 
-> Replace this description with what your SemRel plugin does.
-
-This repository is based on the `SemRels/plugin-template` GitHub template and provides a clean starting point for provider, analyzer, generator, updater, hook, packager, or publisher plugins.
+OCI publisher plugin for semrel. It publishes release artifacts to OCI registries using `oras push`.
 
 ## Repository Layout
 
@@ -27,15 +25,25 @@ go test ./...
 
 ## Configuration
 
-See the SemRel documentation for plugin configuration and runtime integration details:
+Configure in `.semrel.yaml`:
 
-- https://github.com/SemRels/semrel
-- https://registry.semrel.io
+```yaml
+plugins:
+	- uses: publisher-oci
+		args:
+			ref: ghcr.io/semrels/myapp:{version}
+			artifacts: dist/myapp-linux-amd64,dist/myapp-linux-arm64
+```
 
-## Next Steps
+Runtime inputs:
 
-1. Replace all `{{...}}` placeholders.
-2. Rename the module path in `go.mod`.
-3. Implement your plugin logic in `internal/plugin/`.
-4. Wire generated protobuf bindings into `internal/grpc/`.
-5. Create your first tagged release with `v*.*.*`.
+- `SEMREL_VERSION` / `SEMREL_NEXT_VERSION` (required)
+- `SEMREL_DRY_RUN`
+- `SEMREL_PLUGIN_REF` (required; supports `{version}` token)
+- `SEMREL_PLUGIN_ARTIFACTS` (CSV)
+- `SEMREL_PLUGIN_ARTIFACTS_JSON` (JSON array fallback)
+- `SEMREL_PLUGIN_ARTIFACT` (single artifact fallback)
+
+Dependencies:
+
+- `oras` must be installed and available on `PATH`.
