@@ -1,5 +1,7 @@
 # publisher-oci
 
+[![Latest Release](https://img.shields.io/github/v/release/SemRels/publisher-oci?label=version\&color=blue)](https://github.com/SemRels/publisher-oci/releases/latest)
+
 OCI publisher plugin for semrel. It publishes release artifacts to OCI registries using `oras push`.
 
 ## Repository Layout
