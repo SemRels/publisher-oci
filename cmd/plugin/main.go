@@ -26,19 +26,19 @@ func run(stdout, stderr io.Writer, getenv func(string) string) int {
 		version = getenv("SEMREL_NEXT_VERSION")
 	}
 	if version == "" {
-		fmt.Fprintln(stderr, "publisher-oci: SEMREL_VERSION is required")
+		_, _ = fmt.Fprintln(stderr, "publisher-oci: SEMREL_VERSION is required")
 		return 1
 	}
 
 	refTemplate := strings.TrimSpace(getenv("SEMREL_PLUGIN_REF"))
 	if refTemplate == "" {
-		fmt.Fprintln(stderr, "publisher-oci: SEMREL_PLUGIN_REF is required")
+		_, _ = fmt.Fprintln(stderr, "publisher-oci: SEMREL_PLUGIN_REF is required")
 		return 1
 	}
 
 	artifacts, err := plugin.ParseArtifacts(getenv)
 	if err != nil {
-		fmt.Fprintln(stderr, "publisher-oci:", err)
+		_, _ = fmt.Fprintln(stderr, "publisher-oci:", err)
 		return 1
 	}
 
@@ -47,15 +47,15 @@ func run(stdout, stderr io.Writer, getenv func(string) string) int {
 	args := plugin.BuildOrasArgs(resolvedRef, artifacts)
 
 	if err := plugin.RunOras(args, stdout, stderr, dryRun); err != nil {
-		fmt.Fprintln(stderr, "publisher-oci:", err)
+		_, _ = fmt.Fprintln(stderr, "publisher-oci:", err)
 		return 1
 	}
 
 	if dryRun {
-		fmt.Fprintf(stdout, "publisher-oci: [dry-run] publication plan ready for %s\n", resolvedRef)
+		_, _ = fmt.Fprintf(stdout, "publisher-oci: [dry-run] publication plan ready for %s\n", resolvedRef)
 		return 0
 	}
 
-	fmt.Fprintf(stdout, "publisher-oci: published %d artifact(s) to %s\n", len(artifacts), resolvedRef)
+	_, _ = fmt.Fprintf(stdout, "publisher-oci: published %d artifact(s) to %s\n", len(artifacts), resolvedRef)
 	return 0
 }
