@@ -92,6 +92,7 @@ func BuildOrasArgs(ref string, artifacts []string) []string {
 
 func RunOras(args []string, stdout, stderr io.Writer, dryRun bool) error {
 	if dryRun {
+		_, _ = fmt.Fprintf(stderr, "[dry-run] publisher-oci: would publish with oras %s\n", strings.Join(args, " "))
 		_, _ = fmt.Fprintf(stdout, "publisher-oci: [dry-run] would run: oras %s\n", strings.Join(args, " "))
 		return nil
 	}
