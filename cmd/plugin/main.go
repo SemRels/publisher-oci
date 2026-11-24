@@ -43,8 +43,13 @@ func run(stdout, stderr io.Writer, getenv func(string) string) int {
 	}
 
 	resolvedRef := plugin.ResolveRef(refTemplate, strings.TrimPrefix(version, "v"))
-	dryRun := strings.EqualFold(getenv("SEMREL_DRY_RUN"), "true")
+	dryRunValue := getenv("SEMREL_DRY_RUN")
+	dryRun := strings.EqualFold(dryRunValue, "true") || dryRunValue == "1"
 	args := plugin.BuildOrasArgs(resolvedRef, artifacts)
+
+	if dryRun && !hasOCICredentials(getenv) {
+		_, _ = fmt.Fprintln(stderr, "[dry-run] publisher-oci: would need ORAS_PASSWORD (or SEMREL_PLUGIN_TOKEN) to publish")
+	}
 
 	if err := plugin.RunOras(args, stdout, stderr, dryRun); err != nil {
 		_, _ = fmt.Fprintln(stderr, "publisher-oci:", err)
@@ -58,4 +63,21 @@ func run(stdout, stderr io.Writer, getenv func(string) string) int {
 
 	_, _ = fmt.Fprintf(stdout, "publisher-oci: published %d artifact(s) to %s\n", len(artifacts), resolvedRef)
 	return 0
+}
+
+func hasOCICredentials(getenv func(string) string) bool {
+	if getenv == nil {
+		return false
+	}
+	for _, key := range []string{
+		"SEMREL_PLUGIN_TOKEN",
+		"SEMREL_PLUGIN_PASSWORD",
+		"ORAS_PASSWORD",
+		"DOCKER_PASSWORD",
+	} {
+		if strings.TrimSpace(getenv(key)) != "" {
+			return true
+		}
+	}
+	return false
 }
