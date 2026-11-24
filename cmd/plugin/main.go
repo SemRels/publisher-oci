@@ -43,7 +43,8 @@ func run(stdout, stderr io.Writer, getenv func(string) string) int {
 	}
 
 	resolvedRef := plugin.ResolveRef(refTemplate, strings.TrimPrefix(version, "v"))
-	dryRun := strings.EqualFold(getenv("SEMREL_DRY_RUN"), "true")
+	dryRunValue := getenv("SEMREL_DRY_RUN")
+	dryRun := strings.EqualFold(dryRunValue, "true") || dryRunValue == "1"
 	args := plugin.BuildOrasArgs(resolvedRef, artifacts)
 
 	if dryRun && !hasOCICredentials(getenv) {

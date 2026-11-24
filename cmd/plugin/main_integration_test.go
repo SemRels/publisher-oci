@@ -5,8 +5,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -72,6 +74,38 @@ func TestIntegrationInvalidOCIConfigurationFailsBeforeExternalCommand(t *testing
 	}
 	if strings.Contains(stdout.String(), "integration-secret") || strings.Contains(stderr.String(), "integration-secret") {
 		t.Error("invalid configuration leaked its token")
+	}
+}
+
+func TestNumericDryRunDoesNotExecuteOras(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell fixture")
+	}
+
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "executed")
+	if err := os.WriteFile(filepath.Join(dir, "oras"), []byte("#!/bin/sh\nprintf executed > \"$ORAS_TEST_MARKER\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	artifact := filepath.Join(dir, "release.tgz")
+	if err := os.WriteFile(artifact, []byte("release-bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("ORAS_TEST_MARKER", marker)
+
+	var stdout, stderr bytes.Buffer
+	code := run(&stdout, &stderr, integrationEnv(map[string]string{
+		"SEMREL_VERSION":         "1.2.3",
+		"SEMREL_PLUGIN_REF":      "registry.invalid/release:{version}",
+		"SEMREL_PLUGIN_ARTIFACT": artifact,
+		"SEMREL_DRY_RUN":         "1",
+	}))
+	if _, err := os.Stat(marker); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("oras executed or marker could not be checked: %v", err)
+	}
+	if code != 0 || !strings.Contains(stdout.String(), "[dry-run]") {
+		t.Fatalf("dry-run code=%d stdout=%q stderr=%q", code, stdout.String(), stderr.String())
 	}
 }
 
