@@ -1,6 +1,6 @@
 # Code of Conduct
 
-publisher-oci is committed to providing a welcoming and harassment-free community.
+`publisher-oci` is committed to providing a welcoming and harassment-free community.
 
 ## Our Pledge
 
